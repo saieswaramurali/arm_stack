@@ -2,7 +2,7 @@
 
 UR5e simulation in Gazebo Classic driven by MoveIt2, built as clean local packages
 (no Universal Robots vendor repos). Work in progress toward a full
-perception-driven pick-and-place stack — see [plans/](plans/).
+perception-driven pick-and-place stack, see [plans/](plans/).
 
 ## Architecture
 
@@ -56,9 +56,9 @@ ros2 control list_controllers   # expect joint_state_broadcaster + joint_traject
 ## Credits
 
 The UR5e description (URDF/Xacro, meshes, kinematics) and the MoveIt/Gazebo
-configs are derived from Universal Robots' open-source packages —
+configs are derived from Universal Robots' open-source packages:
 [Universal_Robots_ROS2_Description](https://github.com/UniversalRobots/Universal_Robots_ROS2_Description),
 [Universal_Robots_ROS2_Driver](https://github.com/UniversalRobots/Universal_Robots_ROS2_Driver), and
-[Universal_Robots_ROS2_Gazebo_Simulation](https://github.com/UniversalRobots/Universal_Robots_ROS2_Gazebo_Simulation)
-— under the BSD-3-Clause license. Thanks to Universal Robots and the ROS
+[Universal_Robots_ROS2_Gazebo_Simulation](https://github.com/UniversalRobots/Universal_Robots_ROS2_Gazebo_Simulation),
+under the BSD-3-Clause license. Thanks to Universal Robots and the ROS
 community for maintaining them.
