@@ -1,0 +1,8 @@
+build/
+install/
+log/
+
+plans/
+
+
+.vscode
