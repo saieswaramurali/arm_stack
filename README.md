@@ -1,15 +1,24 @@
-# UR5e Gazebo + MoveIt2 Workspace
+# arm-stack: UR5e Manipulation Workspace (ROS 2 Humble)
 
-This workspace is a UR5e-only simulation setup for Gazebo Classic and MoveIt2.
-The upstream Universal Robots source repos have been replaced with three local
-project packages:
+UR5e simulation in Gazebo Classic driven by MoveIt2, built as clean local packages
+(no Universal Robots vendor repos). Work in progress toward a full
+perception-driven pick-and-place stack — see [plans/](plans/).
+
+## Architecture
 
 ```text
 src/
-  arm_description/      # UR5e URDF/Xacro, meshes, limits, kinematics
-  arm_moveit_config/    # UR5e MoveIt2 SRDF, OMPL, kinematics, controllers
-  arm_bringup/          # Gazebo, ros2_control, and top-level launch files
+  arm_description/      # UR5e URDF/Xacro, meshes, limits, kinematics (data only)
+  arm_moveit_config/    # SRDF, OMPL/kinematics/controller config for move_group
+  arm_bringup/          # Gazebo, ros2_control controllers, top-level launch
+  arm_manipulation/     # C++ MoveIt client nodes: goto_named, goto_pose, scene_demo
 ```
+
+Runtime flow: `arm_bringup` loads the URDF into Gazebo + `controller_manager` and
+starts `move_group` (configured by `arm_moveit_config`). The `arm_manipulation`
+nodes send goals to `move_group`, which plans (OMPL, group `ur_manipulator`) and
+executes through `joint_trajectory_controller` back into Gazebo. Planned next:
+`arm_perception` (RGB-D → planning scene) and gripper integration 
 
 ## Build
 
@@ -20,49 +29,36 @@ colcon build --symlink-install
 source install/setup.bash
 ```
 
-If you deleted `install/` in a terminal that had already sourced this workspace,
-reset the environment before rebuilding:
-
-```bash
-unset AMENT_PREFIX_PATH CMAKE_PREFIX_PATH COLCON_PREFIX_PATH
-source /opt/ros/humble/setup.bash
-colcon build --symlink-install
-```
-
 ## Launch
 
 ```bash
 ros2 launch arm_bringup bringup.launch.py
 ```
 
-This starts:
+Starts Gazebo, `robot_state_publisher`, `gazebo_ros2_control`,
+`joint_state_broadcaster`, `joint_trajectory_controller`, `move_group`, and RViz.
 
-- Gazebo Classic
-- `robot_state_publisher`
-- `gazebo_ros2_control`
-- `joint_state_broadcaster`
-- `joint_trajectory_controller`
-- MoveIt `move_group`
-- RViz with the MoveIt plugin
-
-## Useful Checks
+## Run the nodes
 
 ```bash
-xacro src/arm_description/urdf/ur.urdf.xacro sim_gazebo:=true > /tmp/ur5e.urdf
-check_urdf /tmp/ur5e.urdf
-colcon list
-rosdep check --ignore-src --from-paths src
+ros2 run arm_manipulation goto_named          # go to SRDF "home" (or: goto_named up)
+ros2 run arm_manipulation goto_pose           # plan+execute to a Cartesian pose
+ros2 run arm_manipulation scene_demo          # collision object + attach/detach demo
 ```
 
-After launching:
+## Checks
 
 ```bash
-ros2 control list_controllers
+xacro src/arm_description/urdf/ur.urdf.xacro sim_gazebo:=true | check_urdf -
+ros2 control list_controllers   # expect joint_state_broadcaster + joint_trajectory_controller active
 ```
 
-Expected active controllers:
+## Credits
 
-```text
-joint_state_broadcaster
-joint_trajectory_controller
-```
+The UR5e description (URDF/Xacro, meshes, kinematics) and the MoveIt/Gazebo
+configs are derived from Universal Robots' open-source packages —
+[Universal_Robots_ROS2_Description](https://github.com/UniversalRobots/Universal_Robots_ROS2_Description),
+[Universal_Robots_ROS2_Driver](https://github.com/UniversalRobots/Universal_Robots_ROS2_Driver), and
+[Universal_Robots_ROS2_Gazebo_Simulation](https://github.com/UniversalRobots/Universal_Robots_ROS2_Gazebo_Simulation)
+— under the BSD-3-Clause license. Thanks to Universal Robots and the ROS
+community for maintaining them.
