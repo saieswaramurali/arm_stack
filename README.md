@@ -1,8 +1,13 @@
 # arm-stack: UR5e Manipulation Workspace (ROS 2 Humble)
 
-UR5e simulation in Gazebo Classic driven by MoveIt2, built as clean local packages
+UR5e simulation in Gazebo Fortress driven by MoveIt2, built as clean local packages
 (no Universal Robots vendor repos). Work in progress toward a full
 perception-driven pick-and-place stack.
+
+## Dependencies
+
+ROS 2 Humble, MoveIt2, ros2_control/ros2_controllers, Gazebo Fortress
+(`ros_gz`), `gz_ros2_control`, RViz2, and xacro.
 
 ## Architecture
 
@@ -24,7 +29,7 @@ executes through `joint_trajectory_controller` back into Gazebo.
 
 The end effector is a Robotiq 2F-85 attached at `tool0`. It has one actuated
 joint (`robotiq_85_left_knuckle_joint`, mimic joints handled by
-`gazebo_ros2_control`), its own `gripper` planning group with `open`/`closed`
+`gz_ros2_control`), its own `gripper` planning group with `open`/`closed`
 named states, a `tcp` grasp frame at the fingertips, and a
 `GripperCommand` action interface via `gripper_controller`.
 
@@ -43,18 +48,18 @@ source install/setup.bash
 ros2 launch arm_bringup bringup.launch.py
 ```
 
-Starts Gazebo, `robot_state_publisher`, `gazebo_ros2_control`,
+Starts Gazebo Fortress, `robot_state_publisher`, `gz_ros2_control`,
 `joint_state_broadcaster`, `joint_trajectory_controller`, `gripper_controller`,
-`move_group`, and RViz.
+`move_group`, and RViz with the plain robot setup.
 
-For the hardcoded table pick-and-place demo, use the dedicated launch instead:
+For the table pick/place setup:
 
 ```bash
 ros2 launch arm_bringup pick_and_place_bringup.launch.py
 ```
 
-This starts Gazebo Classic with `table_pick.world`, raises the UR5e on a
-platform, loads the pick/place initial joint pose, starts MoveIt, and opens RViz.
+This loads the Ignition table world, raises the UR5e on the platform, and uses
+the pick/place initial joint pose.
 
 ## Run the nodes
 

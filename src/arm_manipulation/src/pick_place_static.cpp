@@ -23,12 +23,22 @@ using GripperCommand = control_msgs::action::GripperCommand;
 using GripperClient = rclcpp_action::Client<GripperCommand>;
 using MoveGroupInterface = moveit::planning_interface::MoveGroupInterface;
 
+enum class GripperStatus {
+    kSucceeded,
+    kContactTimeout,
+    kFailed,
+};
+
 constexpr char kArmGroup[] = "ur_manipulator";
 constexpr char kEndEffectorLink[] = "tcp";
 constexpr char kTableId[] = "table";
 constexpr char kPickBoxId[] = "pick_box";
 constexpr double kVelocityScale = 0.15;
 constexpr double kAccelerationScale = 0.15;
+constexpr double kSlowCartesianVelocityScale = 0.05;
+constexpr double kSlowCartesianAccelerationScale = 0.05;
+constexpr double kPlaceCartesianVelocityScale = 0.10;
+constexpr double kPlaceCartesianAccelerationScale = 0.10;
 constexpr double kCartesianStep = 0.005;
 constexpr double kMinCartesianFraction = 0.95;
 constexpr double kTableX = 0.0;
@@ -40,7 +50,6 @@ constexpr double kTableSizeZ = 0.30;
 constexpr double kBoxSizeX = 0.04;
 constexpr double kBoxSizeY = 0.04;
 constexpr double kBoxSizeZ = 0.06;
-constexpr double kPlaceTcpZOffset = 0.01;
 
 geometry_msgs::msg::Pose make_pose(
     double x, double y, double z, double qx = 0.0, double qy = 0.0,
@@ -135,23 +144,34 @@ bool goto_pose(
 
 bool retime_cartesian(
     MoveGroupInterface& move_group, moveit_msgs::msg::RobotTrajectory& trajectory,
-    rclcpp::Logger const& logger, std::string const& step) {
+    rclcpp::Logger const& logger, std::string const& step,
+    double velocity_scale, double acceleration_scale) {
     robot_trajectory::RobotTrajectory retimed(move_group.getRobotModel(), kArmGroup);
     retimed.setRobotTrajectoryMsg(*move_group.getCurrentState(), trajectory);
     trajectory_processing::TimeOptimalTrajectoryGeneration totg;
-    if (!totg.computeTimeStamps(retimed, kVelocityScale, kAccelerationScale)) {
+    if (!totg.computeTimeStamps(retimed, velocity_scale, acceleration_scale)) {
         RCLCPP_ERROR(logger, "[%s] trajectory retiming failed", step.c_str());
         return false;
     }
     retimed.getRobotTrajectoryMsg(trajectory);
+    if (!trajectory.joint_trajectory.points.empty()) {
+        auto const& last_point = trajectory.joint_trajectory.points.back();
+        double const duration =
+            static_cast<double>(last_point.time_from_start.sec) +
+            static_cast<double>(last_point.time_from_start.nanosec) * 1e-9;
+        RCLCPP_INFO(logger, "[%s] retimed duration: %.2fs", step.c_str(), duration);
+    }
     return true;
 }
 
 bool cartesian_to_pose(
     MoveGroupInterface& move_group, rclcpp::Logger const& logger,
-    std::string const& step, geometry_msgs::msg::Pose const& target) {
+    std::string const& step, geometry_msgs::msg::Pose const& target,
+    double velocity_scale = kSlowCartesianVelocityScale,
+    double acceleration_scale = kSlowCartesianAccelerationScale) {
     std::vector<geometry_msgs::msg::Pose> waypoints{target};
     moveit_msgs::msg::RobotTrajectory trajectory;
+    move_group.setStartStateToCurrentState();
     double const fraction =
         move_group.computeCartesianPath(waypoints, kCartesianStep, 0.0, trajectory);
     RCLCPP_INFO(logger, "[%s] Cartesian coverage: %.1f%%", step.c_str(), fraction * 100.0);
@@ -161,7 +181,8 @@ bool cartesian_to_pose(
             step.c_str(), kMinCartesianFraction * 100.0);
         return false;
     }
-    if (!retime_cartesian(move_group, trajectory, logger, step)) {
+    if (!retime_cartesian(
+            move_group, trajectory, logger, step, velocity_scale, acceleration_scale)) {
         return false;
     }
     if (!static_cast<bool>(move_group.execute(trajectory))) {
@@ -180,10 +201,13 @@ public:
           client_(rclcpp_action::create_client<GripperCommand>(
               node_, "/gripper_controller/gripper_cmd")) {}
 
-    bool command(double position, double max_effort = 60.0) {
+    GripperStatus send_command(
+        double position, double max_effort = 60.0,
+        std::chrono::seconds result_timeout = std::chrono::seconds(10),
+        bool timeout_means_contact = false) {
         if (!client_->wait_for_action_server(std::chrono::seconds(5))) {
             RCLCPP_ERROR(logger_, "[gripper %.2f] action server unavailable", position);
-            return false;
+            return GripperStatus::kFailed;
         }
 
         GripperCommand::Goal goal;
@@ -194,25 +218,32 @@ public:
         auto goal_handle_future = client_->async_send_goal(goal);
         if (goal_handle_future.wait_for(std::chrono::seconds(5)) != std::future_status::ready) {
             RCLCPP_ERROR(logger_, "[gripper %.2f] goal response timed out", position);
-            return false;
+            return GripperStatus::kFailed;
         }
 
         auto goal_handle = goal_handle_future.get();
         if (!goal_handle) {
             RCLCPP_ERROR(logger_, "[gripper %.2f] goal rejected", position);
-            return false;
+            return GripperStatus::kFailed;
         }
 
         auto result_future = client_->async_get_result(goal_handle);
-        if (result_future.wait_for(std::chrono::seconds(10)) != std::future_status::ready) {
+        if (result_future.wait_for(result_timeout) != std::future_status::ready) {
+            if (timeout_means_contact) {
+                RCLCPP_WARN(
+                    logger_,
+                    "[gripper %.2f] result timed out; assuming contact and continuing",
+                    position);
+                return GripperStatus::kContactTimeout;
+            }
             RCLCPP_ERROR(logger_, "[gripper %.2f] result timed out", position);
-            return false;
+            return GripperStatus::kFailed;
         }
 
         auto const wrapped_result = result_future.get();
         if (wrapped_result.code != rclcpp_action::ResultCode::SUCCEEDED) {
             RCLCPP_ERROR(logger_, "[gripper %.2f] action failed", position);
-            return false;
+            return GripperStatus::kFailed;
         }
 
         RCLCPP_INFO(
@@ -222,20 +253,32 @@ public:
             wrapped_result.result->effort,
             wrapped_result.result->stalled ? "true" : "false",
             wrapped_result.result->reached_goal ? "true" : "false");
-        return true;
+        return GripperStatus::kSucceeded;
+    }
+
+    bool command(double position, double max_effort = 60.0) {
+        return send_command(position, max_effort) == GripperStatus::kSucceeded;
     }
 
     bool close_slowly(
         double target_position, double max_effort, double step,
         int pause_ms, int settle_ms) {
         for (double position = step; position < target_position; position += step) {
-            if (!command(position, max_effort)) {
+            auto const status = send_command(
+                position, max_effort, std::chrono::seconds(3), true);
+            if (status == GripperStatus::kContactTimeout) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(settle_ms));
+                return true;
+            }
+            if (status == GripperStatus::kFailed) {
                 return false;
             }
             std::this_thread::sleep_for(std::chrono::milliseconds(pause_ms));
         }
 
-        if (!command(target_position, max_effort)) {
+        auto const status = send_command(
+            target_position, max_effort, std::chrono::seconds(3), true);
+        if (status == GripperStatus::kFailed) {
             return false;
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(settle_ms));
@@ -295,7 +338,8 @@ int main(int argc, char* argv[]) {
     double box_x, box_y, box_z;
     double place_x, place_y, place_z;
     double approach_clearance, lift_height;
-    double grasp_tcp_z_offset, grasp_close_position, grasp_max_effort, grasp_step;
+    double grasp_tcp_z_offset, place_tcp_z_offset;
+    double grasp_close_position, grasp_max_effort, grasp_step;
     int grasp_pause_ms, grasp_settle_ms;
     node->get_parameter_or("box_x", box_x, 0.0);
     node->get_parameter_or("box_y", box_y, 0.75);
@@ -306,6 +350,7 @@ int main(int argc, char* argv[]) {
     node->get_parameter_or("approach_clearance", approach_clearance, 0.12);
     node->get_parameter_or("lift_height", lift_height, 0.10);
     node->get_parameter_or("grasp_tcp_z_offset", grasp_tcp_z_offset, -0.005);
+    node->get_parameter_or("place_tcp_z_offset", place_tcp_z_offset, 0.035);
     node->get_parameter_or("grasp_close_position", grasp_close_position, 0.60);
     node->get_parameter_or("grasp_max_effort", grasp_max_effort, 28.0);
     node->get_parameter_or("grasp_step", grasp_step, 0.025);
@@ -318,6 +363,10 @@ int main(int argc, char* argv[]) {
     if (grasp_tcp_z_offset < -0.02) {
         RCLCPP_WARN(logger, "grasp_tcp_z_offset too low; clamping to -0.02");
         grasp_tcp_z_offset = -0.02;
+    }
+    if (place_tcp_z_offset < 0.02) {
+        RCLCPP_WARN(logger, "place_tcp_z_offset too low; using 0.02");
+        place_tcp_z_offset = 0.02;
     }
     if (grasp_pause_ms < 0) {
         RCLCPP_WARN(logger, "grasp_pause_ms must be non-negative; using 220");
@@ -395,8 +444,10 @@ int main(int argc, char* argv[]) {
     }
 
     auto place_tcp_pose = pre_place;
-    place_tcp_pose.position.z = place_z + kPlaceTcpZOffset;
-    if (!cartesian_to_pose(move_group, logger, "descend_to_place", place_tcp_pose)) {
+    place_tcp_pose.position.z = place_z + place_tcp_z_offset;
+    if (!cartesian_to_pose(
+            move_group, logger, "descend_to_place", place_tcp_pose,
+            kPlaceCartesianVelocityScale, kPlaceCartesianAccelerationScale)) {
         return fail("descend_to_place");
     }
 

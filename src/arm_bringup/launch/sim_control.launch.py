@@ -1,5 +1,10 @@
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, OpaqueFunction
+from launch.actions import (
+    AppendEnvironmentVariable,
+    DeclareLaunchArgument,
+    IncludeLaunchDescription,
+    OpaqueFunction,
+)
 from launch.conditions import IfCondition, UnlessCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import Command, FindExecutable, LaunchConfiguration, PathJoinSubstitution
@@ -20,15 +25,11 @@ def launch_setup(context, *args, **kwargs):
     prefix = LaunchConfiguration("prefix")
     start_joint_controller = LaunchConfiguration("start_joint_controller")
     initial_joint_controller = LaunchConfiguration("initial_joint_controller")
-    launch_rviz = LaunchConfiguration("launch_rviz")
-    gazebo_gui = LaunchConfiguration("gazebo_gui")
+    world = LaunchConfiguration("world")
+    robot_base_z = LaunchConfiguration("robot_base_z")
 
     controllers_file_abs = PathJoinSubstitution(
         [FindPackageShare(runtime_config_package), "config", controllers_file]
-    )
-
-    rviz_config_file = PathJoinSubstitution(
-        [FindPackageShare(description_package), "rviz", "view_robot.rviz"]
     )
 
     robot_description_content = Command(
@@ -51,7 +52,10 @@ def launch_setup(context, *args, **kwargs):
             "prefix:=",
             prefix,
             " ",
-            "sim_gazebo:=true",
+            "robot_base_z:=",
+            robot_base_z,
+            " ",
+            "sim_ignition:=true",
             " ",
             "simulation_controllers:=",
             controllers_file_abs,
@@ -64,6 +68,13 @@ def launch_setup(context, *args, **kwargs):
         "robot_description": ParameterValue(robot_description_content, value_type=str)
     }
 
+    gz_sim = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            PathJoinSubstitution([FindPackageShare("ros_gz_sim"), "launch", "gz_sim.launch.py"])
+        ),
+        launch_arguments={"gz_args": ["-r ", world]}.items(),
+    )
+
     robot_state_publisher_node = Node(
         package="robot_state_publisher",
         executable="robot_state_publisher",
@@ -71,67 +82,106 @@ def launch_setup(context, *args, **kwargs):
         parameters=[{"use_sim_time": True}, robot_description],
     )
 
-    rviz_node = Node(
-        package="rviz2",
-        executable="rviz2",
-        name="rviz2",
-        output="log",
-        arguments=["-d", rviz_config_file],
-        condition=IfCondition(launch_rviz),
+    spawn_robot = Node(
+        package="ros_gz_sim",
+        executable="create",
+        name="spawn_ur",
+        arguments=["-name", "ur", "-topic", "robot_description", "-z", "0"],
+        output="screen",
+    )
+
+    clock_bridge = Node(
+        package="ros_gz_bridge",
+        executable="parameter_bridge",
+        arguments=["/clock@rosgraph_msgs/msg/Clock[ignition.msgs.Clock"],
+        output="screen",
     )
 
     joint_state_broadcaster_spawner = Node(
         package="controller_manager",
         executable="spawner",
-        arguments=["joint_state_broadcaster", "--controller-manager", "/controller_manager"],
+        arguments=[
+            "joint_state_broadcaster",
+            "--controller-manager",
+            "/controller_manager",
+            "--controller-manager-timeout",
+            "60",
+        ],
     )
 
     initial_joint_controller_spawner_started = Node(
         package="controller_manager",
         executable="spawner",
-        arguments=[initial_joint_controller, "-c", "/controller_manager"],
+        arguments=[
+            initial_joint_controller,
+            "-c",
+            "/controller_manager",
+            "--controller-manager-timeout",
+            "60",
+        ],
         condition=IfCondition(start_joint_controller),
     )
     initial_joint_controller_spawner_stopped = Node(
         package="controller_manager",
         executable="spawner",
-        arguments=[initial_joint_controller, "-c", "/controller_manager", "--stopped"],
+        arguments=[
+            initial_joint_controller,
+            "-c",
+            "/controller_manager",
+            "--stopped",
+            "--controller-manager-timeout",
+            "60",
+        ],
         condition=UnlessCondition(start_joint_controller),
     )
     gripper_controller_spawner = Node(
         package="controller_manager",
         executable="spawner",
-        arguments=["gripper_controller", "-c", "/controller_manager"],
-    )
-
-    gazebo = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            [FindPackageShare("gazebo_ros"), "/launch", "/gazebo.launch.py"]
-        ),
-        launch_arguments={"gui": gazebo_gui}.items(),
-    )
-
-    gazebo_spawn_robot = Node(
-        package="gazebo_ros",
-        executable="spawn_entity.py",
-        name="spawn_ur",
-        arguments=["-entity", "ur", "-topic", "robot_description"],
-        output="screen",
+        arguments=[
+            "gripper_controller",
+            "-c",
+            "/controller_manager",
+            "--controller-manager-timeout",
+            "60",
+        ],
     )
 
     return [
+        gz_sim,
         robot_state_publisher_node,
+        spawn_robot,
+        clock_bridge,
         joint_state_broadcaster_spawner,
         initial_joint_controller_spawner_stopped,
         initial_joint_controller_spawner_started,
         gripper_controller_spawner,
-        gazebo,
-        gazebo_spawn_robot,
-        rviz_node,
     ]
 
 
 def generate_launch_description():
+    resource_paths = [
+        AppendEnvironmentVariable(
+            "IGN_GAZEBO_RESOURCE_PATH",
+            PathJoinSubstitution([FindPackageShare("arm_description"), ".."]),
+            separator=":",
+        ),
+        AppendEnvironmentVariable(
+            "IGN_GAZEBO_RESOURCE_PATH",
+            PathJoinSubstitution([FindPackageShare("robotiq_description"), ".."]),
+            separator=":",
+        ),
+        AppendEnvironmentVariable(
+            "GZ_SIM_RESOURCE_PATH",
+            PathJoinSubstitution([FindPackageShare("arm_description"), ".."]),
+            separator=":",
+        ),
+        AppendEnvironmentVariable(
+            "GZ_SIM_RESOURCE_PATH",
+            PathJoinSubstitution([FindPackageShare("robotiq_description"), ".."]),
+            separator=":",
+        ),
+    ]
+
     declared_arguments = [
         DeclareLaunchArgument("safety_limits", default_value="true"),
         DeclareLaunchArgument("safety_pos_margin", default_value="0.15"),
@@ -149,8 +199,10 @@ def generate_launch_description():
         DeclareLaunchArgument("prefix", default_value='""'),
         DeclareLaunchArgument("start_joint_controller", default_value="true"),
         DeclareLaunchArgument("initial_joint_controller", default_value="joint_trajectory_controller"),
-        DeclareLaunchArgument("launch_rviz", default_value="true"),
-        DeclareLaunchArgument("gazebo_gui", default_value="true"),
+        DeclareLaunchArgument("robot_base_z", default_value="0.0"),
+        DeclareLaunchArgument("world", default_value="empty.sdf"),
     ]
 
-    return LaunchDescription(declared_arguments + [OpaqueFunction(function=launch_setup)])
+    return LaunchDescription(
+        resource_paths + declared_arguments + [OpaqueFunction(function=launch_setup)]
+    )

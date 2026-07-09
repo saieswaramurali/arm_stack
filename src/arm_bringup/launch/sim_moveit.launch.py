@@ -15,6 +15,14 @@ def generate_launch_description():
         DeclareLaunchArgument("moveit_config_package", default_value="arm_moveit_config"),
         DeclareLaunchArgument("moveit_config_file", default_value="arm.srdf.xacro"),
         DeclareLaunchArgument("prefix", default_value='""'),
+        DeclareLaunchArgument(
+            "initial_positions_file",
+            default_value=PathJoinSubstitution(
+                [FindPackageShare("arm_description"), "config", "initial_positions.yaml"]
+            ),
+        ),
+        DeclareLaunchArgument("robot_base_z", default_value="0.0"),
+        DeclareLaunchArgument("world", default_value="empty.sdf"),
     ]
 
     sim_control_launch = IncludeLaunchDescription(
@@ -30,7 +38,9 @@ def generate_launch_description():
             "description_package": LaunchConfiguration("description_package"),
             "description_file": LaunchConfiguration("description_file"),
             "prefix": LaunchConfiguration("prefix"),
-            "launch_rviz": "false",
+            "initial_positions_file": LaunchConfiguration("initial_positions_file"),
+            "robot_base_z": LaunchConfiguration("robot_base_z"),
+            "world": LaunchConfiguration("world"),
         }.items(),
     )
 
@@ -47,6 +57,7 @@ def generate_launch_description():
             "moveit_config_package": LaunchConfiguration("moveit_config_package"),
             "moveit_config_file": LaunchConfiguration("moveit_config_file"),
             "prefix": LaunchConfiguration("prefix"),
+            "robot_base_z": LaunchConfiguration("robot_base_z"),
             "use_sim_time": "true",
             "launch_rviz": "true",
         }.items(),

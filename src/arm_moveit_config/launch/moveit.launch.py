@@ -29,6 +29,7 @@ def launch_setup(context, *args, **kwargs):
     prefix = LaunchConfiguration("prefix")
     use_sim_time = LaunchConfiguration("use_sim_time")
     launch_rviz = LaunchConfiguration("launch_rviz")
+    robot_base_z = LaunchConfiguration("robot_base_z")
 
     robot_description_content = Command(
         [
@@ -49,6 +50,9 @@ def launch_setup(context, *args, **kwargs):
             " ",
             "prefix:=",
             prefix,
+            " ",
+            "robot_base_z:=",
+            robot_base_z,
             " ",
         ]
     )
@@ -205,6 +209,11 @@ def generate_launch_description():
             "prefix",
             default_value='""',
             description="Joint/link name prefix.",
+        ),
+        DeclareLaunchArgument(
+            "robot_base_z",
+            default_value="0.0",
+            description="Height of base_link above world.",
         ),
         DeclareLaunchArgument("launch_rviz", default_value="true", description="Launch RViz."),
     ]
