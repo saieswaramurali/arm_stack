@@ -1,5 +1,6 @@
 #include <memory>
 #include <string>
+#include <vector>
 
 #include <rclcpp/rclcpp.hpp>
 #include <geometry_msgs/msg/pose.hpp>
@@ -72,8 +73,15 @@ int main(int argc, char* argv[]) {
     if (!plan_and_execute("around the box")) { rclcpp::shutdown(); return 1; }
 
     // ---- 3. ATTACH the box to the arm: it becomes part of the robot ----
-    // "tool0" is the UR flange frame; use your gripper link once one exists
-    move_group_interface.attachObject("box1", "tool0");
+    std::vector<std::string> touch_links = {
+        "robotiq_85_left_finger_link",
+        "robotiq_85_right_finger_link",
+        "robotiq_85_left_finger_tip_link",
+        "robotiq_85_right_finger_tip_link",
+        "robotiq_85_left_inner_knuckle_link",
+        "robotiq_85_right_inner_knuckle_link",
+    };
+    move_group_interface.attachObject("box1", "tool0", touch_links);
     RCLCPP_INFO(logger, "Attached box1 to tool0 — it now moves (and collides) with the arm");
 
     // ---- 4. Plan somewhere else: planner must now keep the BOX collision-free too ----

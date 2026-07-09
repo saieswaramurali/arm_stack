@@ -48,6 +48,50 @@
       <xacro:arm_joint_interface joint_name="wrist_1_joint" initial_value="${initial_positions['wrist_1_joint']}"/>
       <xacro:arm_joint_interface joint_name="wrist_2_joint" initial_value="${initial_positions['wrist_2_joint']}"/>
       <xacro:arm_joint_interface joint_name="wrist_3_joint" initial_value="${initial_positions['wrist_3_joint']}"/>
+
+      <joint name="robotiq_85_left_knuckle_joint">
+        <command_interface name="position">
+          <param name="min">0.0</param>
+          <param name="max">0.8</param>
+        </command_interface>
+        <state_interface name="position"/>
+        <state_interface name="velocity"/>
+      </joint>
+      <joint name="robotiq_85_right_knuckle_joint">
+        <param name="mimic">robotiq_85_left_knuckle_joint</param>
+        <param name="multiplier">-1</param>
+        <command_interface name="position"/>
+        <state_interface name="position"/>
+        <state_interface name="velocity"/>
+      </joint>
+      <joint name="robotiq_85_left_inner_knuckle_joint">
+        <param name="mimic">robotiq_85_left_knuckle_joint</param>
+        <param name="multiplier">1</param>
+        <command_interface name="position"/>
+        <state_interface name="position"/>
+        <state_interface name="velocity"/>
+      </joint>
+      <joint name="robotiq_85_right_inner_knuckle_joint">
+        <param name="mimic">robotiq_85_left_knuckle_joint</param>
+        <param name="multiplier">-1</param>
+        <command_interface name="position"/>
+        <state_interface name="position"/>
+        <state_interface name="velocity"/>
+      </joint>
+      <joint name="robotiq_85_left_finger_tip_joint">
+        <param name="mimic">robotiq_85_left_knuckle_joint</param>
+        <param name="multiplier">-1</param>
+        <command_interface name="position"/>
+        <state_interface name="position"/>
+        <state_interface name="velocity"/>
+      </joint>
+      <joint name="robotiq_85_right_finger_tip_joint">
+        <param name="mimic">robotiq_85_left_knuckle_joint</param>
+        <param name="multiplier">1</param>
+        <command_interface name="position"/>
+        <state_interface name="position"/>
+        <state_interface name="velocity"/>
+      </joint>
     </ros2_control>
   </xacro:macro>
 </robot>

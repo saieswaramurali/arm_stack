@@ -4,6 +4,8 @@
    <xacro:arg name="name" default="ur"/>
    <!-- import main macro -->
    <xacro:include filename="$(find arm_description)/urdf/ur_macro.xacro"/>
+   <xacro:include filename="$(find robotiq_description)/urdf/ur_to_robotiq_adapter.urdf.xacro"/>
+   <xacro:include filename="$(find robotiq_description)/urdf/robotiq_2f_85_macro.urdf.xacro"/>
 
    <!-- parameters -->
    <xacro:arg name="tf_prefix" default="" />
@@ -79,6 +81,22 @@
      >
      <origin xyz="0 0 0" rpy="0 0 0" />          <!-- position robot in the world -->
    </xacro:ur_robot>
+
+   <xacro:ur_to_robotiq prefix="" parent="tool0" child="robotiq_85_mount_link"/>
+   <xacro:robotiq_gripper
+     name="robotiq_85"
+     prefix=""
+     parent="robotiq_85_mount_link"
+     include_ros2_control="false">
+     <origin xyz="0 0 0" rpy="0 0 0"/>
+   </xacro:robotiq_gripper>
+
+   <link name="tcp"/>
+   <joint name="tcp_joint" type="fixed">
+     <parent link="robotiq_85_base_link"/>
+     <child link="tcp"/>
+     <origin xyz="0 0 0.16" rpy="0 0 0"/>
+   </joint>
 
    <xacro:if value="$(arg sim_gazebo)">
     <!-- Gazebo plugins -->
