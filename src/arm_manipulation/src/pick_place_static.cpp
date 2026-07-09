@@ -32,21 +32,36 @@ enum class GripperStatus {
 constexpr char kArmGroup[] = "ur_manipulator";
 constexpr char kEndEffectorLink[] = "tcp";
 constexpr char kTableId[] = "table";
+constexpr char kPlatformId[] = "robot_platform";
 constexpr char kPickBoxId[] = "pick_box";
-constexpr double kVelocityScale = 0.15;
-constexpr double kAccelerationScale = 0.15;
-constexpr double kSlowCartesianVelocityScale = 0.05;
-constexpr double kSlowCartesianAccelerationScale = 0.05;
-constexpr double kPlaceCartesianVelocityScale = 0.10;
-constexpr double kPlaceCartesianAccelerationScale = 0.10;
+constexpr double kVelocityScale = 0.30;
+constexpr double kAccelerationScale = 0.30;
+constexpr double kSlowCartesianVelocityScale = 0.08;
+constexpr double kSlowCartesianAccelerationScale = 0.08;
+constexpr double kCarryCartesianVelocityScale = 0.15;
+constexpr double kCarryCartesianAccelerationScale = 0.15;
+constexpr double kPlaceCartesianVelocityScale = 0.15;
+constexpr double kPlaceCartesianAccelerationScale = 0.15;
 constexpr double kCartesianStep = 0.005;
+constexpr double kCarryCartesianStep = 0.025;
+constexpr double kShortJumpThreshold = 2.0;
+constexpr double kCarryJumpThreshold = 2.0;
+constexpr double kMaxShortCartesianDuration = 5.0;
+constexpr double kMaxCarryDuration = 8.0;
 constexpr double kMinCartesianFraction = 0.95;
+constexpr int kPlanningSceneSettleMs = 150;
 constexpr double kTableX = 0.0;
 constexpr double kTableY = 0.75;
 constexpr double kTableZ = 0.15;
 constexpr double kTableSizeX = 0.8;
 constexpr double kTableSizeY = 0.8;
 constexpr double kTableSizeZ = 0.30;
+constexpr double kPlatformX = 0.0;
+constexpr double kPlatformY = 0.0;
+constexpr double kPlatformZ = 0.15;
+constexpr double kPlatformSizeX = 0.55;
+constexpr double kPlatformSizeY = 0.55;
+constexpr double kPlatformSizeZ = 0.30;
 constexpr double kBoxSizeX = 0.04;
 constexpr double kBoxSizeY = 0.04;
 constexpr double kBoxSizeZ = 0.06;
@@ -90,10 +105,13 @@ void apply_scene_objects(
     auto table = make_collision_box(
         kTableId, frame_id, make_pose(kTableX, kTableY, kTableZ),
         kTableSizeX, kTableSizeY, kTableSizeZ);
+    auto platform = make_collision_box(
+        kPlatformId, frame_id, make_pose(kPlatformX, kPlatformY, kPlatformZ),
+        kPlatformSizeX, kPlatformSizeY, kPlatformSizeZ);
     auto box = make_collision_box(
         kPickBoxId, frame_id, box_pose, kBoxSizeX, kBoxSizeY, kBoxSizeZ);
-    planning_scene.applyCollisionObjects({table, box});
-    std::this_thread::sleep_for(std::chrono::milliseconds(300));
+    planning_scene.applyCollisionObjects({table, platform, box});
+    std::this_thread::sleep_for(std::chrono::milliseconds(kPlanningSceneSettleMs));
 }
 
 void readd_pick_box(
@@ -101,7 +119,16 @@ void readd_pick_box(
     std::string const& frame_id, geometry_msgs::msg::Pose const& box_pose) {
     planning_scene.applyCollisionObject(make_collision_box(
         kPickBoxId, frame_id, box_pose, kBoxSizeX, kBoxSizeY, kBoxSizeZ));
-    std::this_thread::sleep_for(std::chrono::milliseconds(300));
+    std::this_thread::sleep_for(std::chrono::milliseconds(kPlanningSceneSettleMs));
+}
+
+double trajectory_duration(moveit_msgs::msg::RobotTrajectory const& trajectory) {
+    if (trajectory.joint_trajectory.points.empty()) {
+        return 0.0;
+    }
+    auto const& last_point = trajectory.joint_trajectory.points.back();
+    return static_cast<double>(last_point.time_from_start.sec) +
+           static_cast<double>(last_point.time_from_start.nanosec) * 1e-9;
 }
 
 bool plan_and_execute(
@@ -112,6 +139,9 @@ bool plan_and_execute(
         RCLCPP_ERROR(logger, "[%s] planning failed", step.c_str());
         return false;
     }
+    RCLCPP_INFO(
+        logger, "[%s] planned duration: %.2fs",
+        step.c_str(), trajectory_duration(plan.trajectory_));
     if (!static_cast<bool>(move_group.execute(plan))) {
         RCLCPP_ERROR(logger, "[%s] execution failed", step.c_str());
         return false;
@@ -145,7 +175,7 @@ bool goto_pose(
 bool retime_cartesian(
     MoveGroupInterface& move_group, moveit_msgs::msg::RobotTrajectory& trajectory,
     rclcpp::Logger const& logger, std::string const& step,
-    double velocity_scale, double acceleration_scale) {
+    double velocity_scale, double acceleration_scale, double max_duration = 0.0) {
     robot_trajectory::RobotTrajectory retimed(move_group.getRobotModel(), kArmGroup);
     retimed.setRobotTrajectoryMsg(*move_group.getCurrentState(), trajectory);
     trajectory_processing::TimeOptimalTrajectoryGeneration totg;
@@ -154,12 +184,14 @@ bool retime_cartesian(
         return false;
     }
     retimed.getRobotTrajectoryMsg(trajectory);
-    if (!trajectory.joint_trajectory.points.empty()) {
-        auto const& last_point = trajectory.joint_trajectory.points.back();
-        double const duration =
-            static_cast<double>(last_point.time_from_start.sec) +
-            static_cast<double>(last_point.time_from_start.nanosec) * 1e-9;
-        RCLCPP_INFO(logger, "[%s] retimed duration: %.2fs", step.c_str(), duration);
+    RCLCPP_INFO(
+        logger, "[%s] retimed duration: %.2fs",
+        step.c_str(), trajectory_duration(trajectory));
+    if (max_duration > 0.0 && trajectory_duration(trajectory) > max_duration) {
+        RCLCPP_WARN(
+            logger, "[%s] rejected %.2fs trajectory; limit is %.2fs",
+            step.c_str(), trajectory_duration(trajectory), max_duration);
+        return false;
     }
     return true;
 }
@@ -168,12 +200,14 @@ bool cartesian_to_pose(
     MoveGroupInterface& move_group, rclcpp::Logger const& logger,
     std::string const& step, geometry_msgs::msg::Pose const& target,
     double velocity_scale = kSlowCartesianVelocityScale,
-    double acceleration_scale = kSlowCartesianAccelerationScale) {
+    double acceleration_scale = kSlowCartesianAccelerationScale,
+    double eef_step = kCartesianStep, double jump_threshold = 0.0,
+    double max_duration = 0.0) {
     std::vector<geometry_msgs::msg::Pose> waypoints{target};
     moveit_msgs::msg::RobotTrajectory trajectory;
     move_group.setStartStateToCurrentState();
     double const fraction =
-        move_group.computeCartesianPath(waypoints, kCartesianStep, 0.0, trajectory);
+        move_group.computeCartesianPath(waypoints, eef_step, jump_threshold, trajectory);
     RCLCPP_INFO(logger, "[%s] Cartesian coverage: %.1f%%", step.c_str(), fraction * 100.0);
     if (fraction < kMinCartesianFraction) {
         RCLCPP_ERROR(
@@ -182,7 +216,8 @@ bool cartesian_to_pose(
         return false;
     }
     if (!retime_cartesian(
-            move_group, trajectory, logger, step, velocity_scale, acceleration_scale)) {
+            move_group, trajectory, logger, step, velocity_scale, acceleration_scale,
+            max_duration)) {
         return false;
     }
     if (!static_cast<bool>(move_group.execute(trajectory))) {
@@ -191,6 +226,22 @@ bool cartesian_to_pose(
     }
     RCLCPP_INFO(logger, "[%s] complete", step.c_str());
     return true;
+}
+
+bool guarded_cartesian_or_pose(
+    MoveGroupInterface& move_group, rclcpp::Logger const& logger,
+    std::string const& step, geometry_msgs::msg::Pose const& target,
+    double velocity_scale = kSlowCartesianVelocityScale,
+    double acceleration_scale = kSlowCartesianAccelerationScale,
+    double max_duration = kMaxShortCartesianDuration) {
+    if (cartesian_to_pose(
+            move_group, logger, step, target, velocity_scale, acceleration_scale,
+            kCartesianStep, kShortJumpThreshold, max_duration)) {
+        return true;
+    }
+
+    RCLCPP_WARN(logger, "[%s] Cartesian path rejected; trying pose plan", step.c_str());
+    return goto_pose(move_group, logger, step, target);
 }
 
 class GripperCommander {
@@ -203,7 +254,7 @@ public:
 
     GripperStatus send_command(
         double position, double max_effort = 60.0,
-        std::chrono::seconds result_timeout = std::chrono::seconds(10),
+        std::chrono::milliseconds result_timeout = std::chrono::seconds(10),
         bool timeout_means_contact = false) {
         if (!client_->wait_for_action_server(std::chrono::seconds(5))) {
             RCLCPP_ERROR(logger_, "[gripper %.2f] action server unavailable", position);
@@ -262,10 +313,10 @@ public:
 
     bool close_slowly(
         double target_position, double max_effort, double step,
-        int pause_ms, int settle_ms) {
+        int pause_ms, int settle_ms, int contact_timeout_ms) {
         for (double position = step; position < target_position; position += step) {
             auto const status = send_command(
-                position, max_effort, std::chrono::seconds(3), true);
+                position, max_effort, std::chrono::milliseconds(contact_timeout_ms), true);
             if (status == GripperStatus::kContactTimeout) {
                 std::this_thread::sleep_for(std::chrono::milliseconds(settle_ms));
                 return true;
@@ -277,7 +328,7 @@ public:
         }
 
         auto const status = send_command(
-            target_position, max_effort, std::chrono::seconds(3), true);
+            target_position, max_effort, std::chrono::milliseconds(contact_timeout_ms), true);
         if (status == GripperStatus::kFailed) {
             return false;
         }
@@ -340,7 +391,7 @@ int main(int argc, char* argv[]) {
     double approach_clearance, lift_height;
     double grasp_tcp_z_offset, place_tcp_z_offset;
     double grasp_close_position, grasp_max_effort, grasp_step;
-    int grasp_pause_ms, grasp_settle_ms;
+    int grasp_pause_ms, grasp_settle_ms, grasp_contact_timeout_ms;
     node->get_parameter_or("box_x", box_x, 0.0);
     node->get_parameter_or("box_y", box_y, 0.75);
     node->get_parameter_or("box_z", box_z, 0.33);
@@ -353,12 +404,13 @@ int main(int argc, char* argv[]) {
     node->get_parameter_or("place_tcp_z_offset", place_tcp_z_offset, 0.035);
     node->get_parameter_or("grasp_close_position", grasp_close_position, 0.60);
     node->get_parameter_or("grasp_max_effort", grasp_max_effort, 28.0);
-    node->get_parameter_or("grasp_step", grasp_step, 0.025);
-    node->get_parameter_or("grasp_pause_ms", grasp_pause_ms, 220);
-    node->get_parameter_or("grasp_settle_ms", grasp_settle_ms, 700);
+    node->get_parameter_or("grasp_step", grasp_step, 0.05);
+    node->get_parameter_or("grasp_pause_ms", grasp_pause_ms, 80);
+    node->get_parameter_or("grasp_settle_ms", grasp_settle_ms, 350);
+    node->get_parameter_or("grasp_contact_timeout_ms", grasp_contact_timeout_ms, 1000);
     if (grasp_step <= 0.0) {
-        RCLCPP_WARN(logger, "grasp_step must be positive; using 0.025");
-        grasp_step = 0.025;
+        RCLCPP_WARN(logger, "grasp_step must be positive; using 0.05");
+        grasp_step = 0.05;
     }
     if (grasp_tcp_z_offset < -0.02) {
         RCLCPP_WARN(logger, "grasp_tcp_z_offset too low; clamping to -0.02");
@@ -369,12 +421,16 @@ int main(int argc, char* argv[]) {
         place_tcp_z_offset = 0.02;
     }
     if (grasp_pause_ms < 0) {
-        RCLCPP_WARN(logger, "grasp_pause_ms must be non-negative; using 220");
-        grasp_pause_ms = 220;
+        RCLCPP_WARN(logger, "grasp_pause_ms must be non-negative; using 80");
+        grasp_pause_ms = 80;
     }
     if (grasp_settle_ms < 0) {
-        RCLCPP_WARN(logger, "grasp_settle_ms must be non-negative; using 700");
-        grasp_settle_ms = 700;
+        RCLCPP_WARN(logger, "grasp_settle_ms must be non-negative; using 350");
+        grasp_settle_ms = 350;
+    }
+    if (grasp_contact_timeout_ms < 500) {
+        RCLCPP_WARN(logger, "grasp_contact_timeout_ms too low; using 500");
+        grasp_contact_timeout_ms = 500;
     }
 
     auto const frame_id = move_group.getPlanningFrame();
@@ -413,41 +469,48 @@ int main(int argc, char* argv[]) {
 
     auto grasp_pose = pre_grasp;
     grasp_pose.position.z = box_z + grasp_tcp_z_offset;
-    if (!cartesian_to_pose(move_group, logger, "descend_to_grasp", grasp_pose)) {
+    if (!guarded_cartesian_or_pose(move_group, logger, "descend_to_grasp", grasp_pose)) {
         return fail("descend_to_grasp");
     }
 
     planning_scene.removeCollisionObjects({kPickBoxId});
-    std::this_thread::sleep_for(std::chrono::milliseconds(300));
+    std::this_thread::sleep_for(std::chrono::milliseconds(kPlanningSceneSettleMs));
     RCLCPP_INFO(logger, "[allow_contact] removed pick_box from world collision objects");
 
     if (!gripper.close_slowly(
             grasp_close_position, grasp_max_effort,
-            grasp_step, grasp_pause_ms, grasp_settle_ms)) {
+            grasp_step, grasp_pause_ms, grasp_settle_ms, grasp_contact_timeout_ms)) {
         return fail("close_gripper");
     }
 
     readd_pick_box(planning_scene, frame_id, box_pose);
     move_group.attachObject(kPickBoxId, kEndEffectorLink, gripper_touch_links());
-    std::this_thread::sleep_for(std::chrono::milliseconds(300));
+    std::this_thread::sleep_for(std::chrono::milliseconds(kPlanningSceneSettleMs));
     RCLCPP_INFO(logger, "[attach_pick_box] attached pick_box to %s", kEndEffectorLink);
 
     auto lifted_pose = grasp_pose;
     lifted_pose.position.z += lift_height;
-    if (!cartesian_to_pose(move_group, logger, "retreat_with_box", lifted_pose)) {
+    if (!guarded_cartesian_or_pose(move_group, logger, "retreat_with_box", lifted_pose)) {
         return fail("retreat_with_box");
     }
 
     auto pre_place = tool_down(place_x, place_y, place_z + approach_clearance);
-    if (!goto_pose(move_group, logger, "transport_to_place", pre_place)) {
-        return fail("transport_to_place");
+    if (!cartesian_to_pose(
+            move_group, logger, "transport_to_place", pre_place,
+            kCarryCartesianVelocityScale, kCarryCartesianAccelerationScale,
+            kCarryCartesianStep, kCarryJumpThreshold, kMaxCarryDuration)) {
+        RCLCPP_WARN(logger, "[transport_to_place] Cartesian carry rejected; trying pose plan");
+        if (!goto_pose(move_group, logger, "transport_to_place", pre_place)) {
+            return fail("transport_to_place");
+        }
     }
 
     auto place_tcp_pose = pre_place;
     place_tcp_pose.position.z = place_z + place_tcp_z_offset;
-    if (!cartesian_to_pose(
+    if (!guarded_cartesian_or_pose(
             move_group, logger, "descend_to_place", place_tcp_pose,
-            kPlaceCartesianVelocityScale, kPlaceCartesianAccelerationScale)) {
+            kPlaceCartesianVelocityScale, kPlaceCartesianAccelerationScale,
+            kMaxShortCartesianDuration)) {
         return fail("descend_to_place");
     }
 
@@ -456,13 +519,13 @@ int main(int argc, char* argv[]) {
     }
 
     move_group.detachObject(kPickBoxId);
-    std::this_thread::sleep_for(std::chrono::milliseconds(300));
+    std::this_thread::sleep_for(std::chrono::milliseconds(kPlanningSceneSettleMs));
     readd_pick_box(planning_scene, frame_id, place_pose);
     RCLCPP_INFO(logger, "[detach_pick_box] detached pick_box and updated planning scene");
 
     auto retreat_pose = place_tcp_pose;
     retreat_pose.position.z += lift_height;
-    if (!cartesian_to_pose(move_group, logger, "retreat_after_place", retreat_pose)) {
+    if (!guarded_cartesian_or_pose(move_group, logger, "retreat_after_place", retreat_pose)) {
         return fail("retreat_after_place");
     }
 

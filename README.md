@@ -4,6 +4,8 @@ UR5e simulation in Gazebo Fortress driven by MoveIt2, built as clean local packa
 (no Universal Robots vendor repos). Work in progress toward a full
 perception-driven pick-and-place stack.
 
+![Pick and place setup](docs/images/pick_and_place_setup.png)
+
 ## Dependencies
 
 ROS 2 Humble, MoveIt2, ros2_control/ros2_controllers, Gazebo Fortress
@@ -42,7 +44,7 @@ colcon build --symlink-install
 source install/setup.bash
 ```
 
-## Launch
+## Normal Robot Flow
 
 ```bash
 ros2 launch arm_bringup bringup.launch.py
@@ -52,30 +54,33 @@ Starts Gazebo Fortress, `robot_state_publisher`, `gz_ros2_control`,
 `joint_state_broadcaster`, `joint_trajectory_controller`, `gripper_controller`,
 `move_group`, and RViz with the plain robot setup.
 
-For the table pick/place setup:
+Useful nodes:
+
+```bash
+ros2 run arm_manipulation goto_named        # go to SRDF "home" (or: goto_named up)
+ros2 run arm_manipulation goto_pose         # plan+execute to a Cartesian pose
+ros2 run arm_manipulation scene_demo        # collision object + attach/detach demo
+```
+
+## Pick/Place Flow
 
 ```bash
 ros2 launch arm_bringup pick_and_place_bringup.launch.py
 ```
 
-This loads the Ignition table world, raises the UR5e on the platform, and uses
-the pick/place initial joint pose.
-
-## Run the nodes
+Loads the Ignition table world, raises the UR5e on the platform, and uses the
+pick/place initial joint pose.
 
 ```bash
-ros2 run arm_manipulation goto_named          # go to SRDF "home" (or: goto_named up)
-ros2 run arm_manipulation goto_pose           # plan+execute to a Cartesian pose
-ros2 run arm_manipulation scene_demo          # collision object + attach/detach demo
-ros2 run arm_manipulation pick_place_static   # hardcoded table pick-and-place
-ros2 action send_goal /gripper_controller/gripper_cmd control_msgs/action/GripperCommand "{command: {position: 0.8, max_effort: 50.0}}"  # close
-ros2 action send_goal /gripper_controller/gripper_cmd control_msgs/action/GripperCommand "{command: {position: 0.0, max_effort: 50.0}}"  # open
+ros2 run arm_manipulation pick_place_static
+ros2 run arm_manipulation pick_place_static --ros-args -p grasp_tcp_z_offset:=-0.01 -p grasp_close_position:=0.61 -p grasp_max_effort:=30.0
 ```
 
-Pick/place tuning example:
+Gripper actions:
 
 ```bash
-ros2 run arm_manipulation pick_place_static --ros-args -p grasp_tcp_z_offset:=-0.01 -p grasp_close_position:=0.61 -p grasp_max_effort:=30.0
+ros2 action send_goal /gripper_controller/gripper_cmd control_msgs/action/GripperCommand "{command: {position: 0.8, max_effort: 50.0}}"  # close
+ros2 action send_goal /gripper_controller/gripper_cmd control_msgs/action/GripperCommand "{command: {position: 0.0, max_effort: 50.0}}"  # open
 ```
 
 ## Checks
