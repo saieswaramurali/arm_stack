@@ -1,23 +1,35 @@
 # Setup
 
-## Install Dependencies
-
-Recommended:
+## Clone
 
 ```bash
+mkdir -p ~/ros_ws
+cd ~/ros_ws
+git clone https://github.com/saieswaramurali/arm_stack.git
+cd arm_stack
+```
+
+## Install Dependencies
+
+```bash
+source /opt/ros/humble/setup.bash
 rosdep update
 rosdep install --ignore-src --from-paths src -y
 ```
 
-Equivalent core apt packages:
+Core packages are ROS 2 Humble, MoveIt2, `ros2_control`,
+`ros2_controllers`, Gazebo Fortress via `ros_gz`, `ign_ros2_control`, RViz2,
+and xacro.
+
+If needed:
 
 ```bash
 sudo apt install \
-  ros-humble-gazebo-ros-pkgs \
-  ros-humble-gazebo-ros2-control \
+  ros-humble-moveit \
   ros-humble-ros2-control \
   ros-humble-ros2-controllers \
-  ros-humble-moveit \
+  ros-humble-ros-gz \
+  ros-humble-ign-ros2-control \
   ros-humble-xacro \
   liburdfdom-tools
 ```
@@ -25,38 +37,49 @@ sudo apt install \
 ## Build
 
 ```bash
-cd /home/sai/Desktop/ros_ws/Universal_Robots_ROS2_Gazebo_Simulation
 source /opt/ros/humble/setup.bash
 colcon build --symlink-install
 source install/setup.bash
 ```
 
-## Run
+## Normal Robot
+
+Terminal 1:
 
 ```bash
+source install/setup.bash
 ros2 launch arm_bringup bringup.launch.py
 ```
 
-## Notes
+Terminal 2:
 
-This workspace no longer needs these UR source packages:
-
-```text
-ur_description
-ur_moveit_config
-ur_simulation_gazebo
-ur_robot_driver
-ur_controllers
-ur_dashboard_msgs
+```bash
+source install/setup.bash
+ros2 run arm_manipulation goto_named
+ros2 run arm_manipulation goto_pose
+ros2 run arm_manipulation scene_demo
 ```
 
-It also no longer needs the old source-build dependencies:
+## Pick/Place Demo
 
-```text
-ros-humble-ur-msgs
-ros-humble-ur-client-library
-ros-humble-ros2-controllers-test-nodes
-ros-humble-hardware-interface-testing
-ros-humble-warehouse-ros-sqlite
-socat
+Terminal 1:
+
+```bash
+source install/setup.bash
+ros2 launch arm_bringup pick_and_place_bringup.launch.py
+```
+
+Terminal 2:
+
+```bash
+source install/setup.bash
+ros2 run arm_manipulation pick_place_static
+```
+
+## Checks
+
+```bash
+ros2 control list_controllers
+ros2 action list | grep gripper_cmd
+xacro src/arm_description/urdf/ur.urdf.xacro sim_ignition:=true | check_urdf -
 ```

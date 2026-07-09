@@ -18,7 +18,7 @@ src/
   arm_description/      # UR5e URDF/Xacro, meshes, limits, kinematics (data only)
   arm_moveit_config/    # SRDF, OMPL/kinematics/controller config for move_group
   arm_bringup/          # Gazebo, ros2_control controllers, top-level launch
-  arm_manipulation/     # C++ MoveIt clients: goto_*, scene_demo, trace_cartesian_path, pick_place_static
+  arm_manipulation/     # C++ MoveIt clients: goto_*, scene_demo, trace_cartesian_path, pick/place demo
   robotiq_description/  # Vendored Robotiq 2F-85 description package only
 ```
 
@@ -70,6 +70,8 @@ ros2 launch arm_bringup pick_and_place_bringup.launch.py
 
 Loads the Ignition table world, raises the UR5e on the platform, and uses the
 pick/place initial joint pose.
+
+![Pick and place static demo](docs/images/pick_and_place_static_demo.gif)
 
 ```bash
 ros2 run arm_manipulation pick_place_static
