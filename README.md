@@ -11,7 +11,7 @@ src/
   arm_description/      # UR5e URDF/Xacro, meshes, limits, kinematics (data only)
   arm_moveit_config/    # SRDF, OMPL/kinematics/controller config for move_group
   arm_bringup/          # Gazebo, ros2_control controllers, top-level launch
-  arm_manipulation/     # C++ MoveIt client nodes: goto_named, goto_pose, scene_demo
+  arm_manipulation/     # C++ MoveIt clients: goto_*, scene_demo, trace_cartesian_path, pick_place_static
   robotiq_description/  # Vendored Robotiq 2F-85 description package only
 ```
 
@@ -47,14 +47,30 @@ Starts Gazebo, `robot_state_publisher`, `gazebo_ros2_control`,
 `joint_state_broadcaster`, `joint_trajectory_controller`, `gripper_controller`,
 `move_group`, and RViz.
 
+For the hardcoded table pick-and-place demo, use the dedicated launch instead:
+
+```bash
+ros2 launch arm_bringup pick_and_place_bringup.launch.py
+```
+
+This starts Gazebo Classic with `table_pick.world`, raises the UR5e on a
+platform, loads the pick/place initial joint pose, starts MoveIt, and opens RViz.
+
 ## Run the nodes
 
 ```bash
 ros2 run arm_manipulation goto_named          # go to SRDF "home" (or: goto_named up)
 ros2 run arm_manipulation goto_pose           # plan+execute to a Cartesian pose
 ros2 run arm_manipulation scene_demo          # collision object + attach/detach demo
+ros2 run arm_manipulation pick_place_static   # hardcoded table pick-and-place
 ros2 action send_goal /gripper_controller/gripper_cmd control_msgs/action/GripperCommand "{command: {position: 0.8, max_effort: 50.0}}"  # close
 ros2 action send_goal /gripper_controller/gripper_cmd control_msgs/action/GripperCommand "{command: {position: 0.0, max_effort: 50.0}}"  # open
+```
+
+Pick/place tuning example:
+
+```bash
+ros2 run arm_manipulation pick_place_static --ros-args -p grasp_tcp_z_offset:=-0.01 -p grasp_close_position:=0.61 -p grasp_max_effort:=30.0
 ```
 
 ## Checks

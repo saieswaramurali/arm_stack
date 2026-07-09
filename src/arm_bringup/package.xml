@@ -10,6 +10,7 @@
 
   <buildtool_depend>ament_cmake</buildtool_depend>
 
+  <exec_depend>ament_index_python</exec_depend>
   <exec_depend>arm_description</exec_depend>
   <exec_depend>arm_moveit_config</exec_depend>
   <exec_depend>controller_manager</exec_depend>

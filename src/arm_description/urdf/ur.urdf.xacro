@@ -16,6 +16,7 @@
    <xacro:arg name="safety_limits" default="false"/>
    <xacro:arg name="safety_pos_margin" default="0.15"/>
    <xacro:arg name="safety_k_position" default="20"/>
+   <xacro:arg name="robot_base_z" default="0.0"/>
 
      <!-- Simulation parameters -->
    <xacro:arg name="use_fake_hardware" default="false" />
@@ -79,7 +80,7 @@
      sim_ignition="$(arg sim_ignition)"
      initial_positions="${xacro.load_yaml(initial_positions_file)}"
      >
-     <origin xyz="0 0 0" rpy="0 0 0" />          <!-- position robot in the world -->
+     <origin xyz="0 0 $(arg robot_base_z)" rpy="0 0 0" />          <!-- position robot in the world -->
    </xacro:ur_robot>
 
    <xacro:ur_to_robotiq prefix="" parent="tool0" child="robotiq_85_mount_link"/>
