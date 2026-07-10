@@ -27,6 +27,7 @@ def launch_setup(context, *args, **kwargs):
     initial_joint_controller = LaunchConfiguration("initial_joint_controller")
     world = LaunchConfiguration("world")
     robot_base_z = LaunchConfiguration("robot_base_z")
+    enable_camera = LaunchConfiguration("enable_camera")
 
     controllers_file_abs = PathJoinSubstitution(
         [FindPackageShare(runtime_config_package), "config", controllers_file]
@@ -97,6 +98,19 @@ def launch_setup(context, *args, **kwargs):
         output="screen",
     )
 
+    camera_bridge = Node(
+        package="ros_gz_bridge",
+        executable="parameter_bridge",
+        arguments=[
+            "/wrist_camera/image@sensor_msgs/msg/Image[ignition.msgs.Image",
+            "/wrist_camera/depth_image@sensor_msgs/msg/Image[ignition.msgs.Image",
+            "/wrist_camera/camera_info@sensor_msgs/msg/CameraInfo[ignition.msgs.CameraInfo",
+            "/wrist_camera/points@sensor_msgs/msg/PointCloud2[ignition.msgs.PointCloudPacked",
+        ],
+        output="screen",
+        condition=IfCondition(enable_camera),
+    )
+
     joint_state_broadcaster_spawner = Node(
         package="controller_manager",
         executable="spawner",
@@ -151,6 +165,7 @@ def launch_setup(context, *args, **kwargs):
         robot_state_publisher_node,
         spawn_robot,
         clock_bridge,
+        camera_bridge,
         joint_state_broadcaster_spawner,
         initial_joint_controller_spawner_stopped,
         initial_joint_controller_spawner_started,
@@ -201,6 +216,7 @@ def generate_launch_description():
         DeclareLaunchArgument("initial_joint_controller", default_value="joint_trajectory_controller"),
         DeclareLaunchArgument("robot_base_z", default_value="0.0"),
         DeclareLaunchArgument("world", default_value="empty.sdf"),
+        DeclareLaunchArgument("enable_camera", default_value="false"),
     ]
 
     return LaunchDescription(

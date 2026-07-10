@@ -23,6 +23,7 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument("robot_base_z", default_value="0.0"),
         DeclareLaunchArgument("world", default_value="empty.sdf"),
+        DeclareLaunchArgument("enable_camera", default_value="false"),
     ]
 
     sim_control_launch = IncludeLaunchDescription(
@@ -41,6 +42,7 @@ def generate_launch_description():
             "initial_positions_file": LaunchConfiguration("initial_positions_file"),
             "robot_base_z": LaunchConfiguration("robot_base_z"),
             "world": LaunchConfiguration("world"),
+            "enable_camera": LaunchConfiguration("enable_camera"),
         }.items(),
     )
 

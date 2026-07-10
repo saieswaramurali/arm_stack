@@ -1,5 +1,6 @@
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.actions import DeclareLaunchArgument, ExecuteProcess, IncludeLaunchDescription, TimerAction
+from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.substitutions import FindPackageShare
@@ -22,6 +23,10 @@ def generate_launch_description():
             ),
         ),
         DeclareLaunchArgument("robot_base_z", default_value="0.30"),
+        DeclareLaunchArgument("enable_camera", default_value="true"),
+        DeclareLaunchArgument("spawn_randomly", default_value="true"),
+        DeclareLaunchArgument("random_box_count", default_value="2"),
+        DeclareLaunchArgument("random_spawn_world", default_value="table_pick_ign"),
         DeclareLaunchArgument(
             "world",
             default_value=PathJoinSubstitution(
@@ -48,7 +53,29 @@ def generate_launch_description():
             "initial_positions_file": LaunchConfiguration("initial_positions_file"),
             "robot_base_z": LaunchConfiguration("robot_base_z"),
             "world": LaunchConfiguration("world"),
+            "enable_camera": LaunchConfiguration("enable_camera"),
         }.items(),
     )
 
-    return LaunchDescription(declared_arguments + [sim_moveit_launch])
+    random_object_spawner = TimerAction(
+        period=5.0,
+        actions=[
+            ExecuteProcess(
+                cmd=[
+                    "ros2",
+                    "run",
+                    "arm_bringup",
+                    "spawn_objects.py",
+                    "--reset",
+                    "--world",
+                    LaunchConfiguration("random_spawn_world"),
+                    "--count",
+                    LaunchConfiguration("random_box_count"),
+                ],
+                output="screen",
+                condition=IfCondition(LaunchConfiguration("spawn_randomly")),
+            )
+        ],
+    )
+
+    return LaunchDescription(declared_arguments + [sim_moveit_launch, random_object_spawner])

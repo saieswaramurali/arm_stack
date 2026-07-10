@@ -1,8 +1,13 @@
+# ros folders
 build/
 install/
 log/
 
+# references
 plans/
 
+# cache 
+__pycache__
 
+#configs
 .vscode
