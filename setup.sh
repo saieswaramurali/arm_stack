@@ -21,8 +21,11 @@ Install it first: https://docs.ros.org/en/humble/Installation.html"
 fi
 
 log "sourcing ROS 2 ${ROS_DISTRO_EXPECTED}"
+# ROS setup.bash reads variables that may be unset; relax nounset around it
+set +u
 # shellcheck disable=SC1090
 source "/opt/ros/${ROS_DISTRO_EXPECTED}/setup.bash"
+set -u
 
 # 2. Base tooling ------------------------------------------------------------
 log "installing base tooling (sudo required)"

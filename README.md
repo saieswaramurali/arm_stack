@@ -6,6 +6,21 @@ wrist-camera RGB-D detection, MoveIt Task Constructor picking, and drop-to-bin.
 
 ![Dynamic pick and place demo](docs/images/pick_and_place_dynamic.gif)
 
+## Setup
+
+First-time setup on ROS 2 Humble: clone and run the setup script. It installs
+dependencies via rosdep and apt, then builds the workspace.
+
+```bash
+git clone https://github.com/saieswaramurali/arm_stack.git
+cd arm_stack
+./setup.sh
+source install/setup.bash
+```
+
+For manual step-by-step installation and the full launch walkthrough, see
+[SETUP.md](SETUP.md).
+
 ## Dependencies
 
 ROS 2 Humble, MoveIt2, ros2_control/ros2_controllers, Gazebo Fortress
