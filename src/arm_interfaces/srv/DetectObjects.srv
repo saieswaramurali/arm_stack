@@ -1,0 +1,6 @@
+---
+bool success
+string message
+string[] ids
+geometry_msgs/PoseArray tcp_poses
+geometry_msgs/PoseArray world_poses

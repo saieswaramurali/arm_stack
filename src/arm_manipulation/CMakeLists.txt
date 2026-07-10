@@ -14,15 +14,18 @@ find_package(moveit_msgs REQUIRED)
 find_package(shape_msgs REQUIRED)
 find_package(visualization_msgs REQUIRED)
 find_package(moveit_ros_planning_interface REQUIRED)
+find_package(arm_interfaces REQUIRED)
 
 add_executable(goto_pose src/goto_pose.cpp)
 add_executable(goto_named src/goto_named.cpp)
 add_executable(scene_demo src/scene_demo.cpp)
 add_executable(trace_cartesian_path src/trace_cartesian_path.cpp)
 add_executable(pick_place_static src/pick_place_static.cpp)
+add_executable(pick_place_dynamic src/pick_place_dynamic.cpp)
+add_executable(tune_pick_place src/tune_pick_place.cpp)
 
 
-foreach(target goto_pose goto_named scene_demo trace_cartesian_path pick_place_static)
+foreach(target goto_pose goto_named scene_demo trace_cartesian_path pick_place_static pick_place_dynamic tune_pick_place)
   target_compile_features(${target} PUBLIC cxx_std_17)
   ament_target_dependencies(${target}
     rclcpp
@@ -33,6 +36,7 @@ foreach(target goto_pose goto_named scene_demo trace_cartesian_path pick_place_s
     shape_msgs
     visualization_msgs
     moveit_ros_planning_interface
+    arm_interfaces
   )
 endforeach()
 
@@ -42,6 +46,8 @@ install(TARGETS
   scene_demo
   trace_cartesian_path
   pick_place_static
+  pick_place_dynamic
+  tune_pick_place
   DESTINATION lib/${PROJECT_NAME}
 )
 

@@ -318,6 +318,17 @@ public:
             auto const status = send_command(
                 position, max_effort, std::chrono::milliseconds(contact_timeout_ms), true);
             if (status == GripperStatus::kContactTimeout) {
+                if (position < target_position) {
+                    RCLCPP_INFO(
+                        logger_, "[gripper %.2f] contact detected; applying final squeeze %.2f",
+                        position, target_position);
+                    auto const squeeze_status = send_command(
+                        target_position, max_effort,
+                        std::chrono::milliseconds(contact_timeout_ms), true);
+                    if (squeeze_status == GripperStatus::kFailed) {
+                        return false;
+                    }
+                }
                 std::this_thread::sleep_for(std::chrono::milliseconds(settle_ms));
                 return true;
             }
@@ -402,15 +413,15 @@ int main(int argc, char* argv[]) {
     node->get_parameter_or("lift_height", lift_height, 0.10);
     node->get_parameter_or("grasp_tcp_z_offset", grasp_tcp_z_offset, -0.005);
     node->get_parameter_or("place_tcp_z_offset", place_tcp_z_offset, 0.035);
-    node->get_parameter_or("grasp_close_position", grasp_close_position, 0.60);
-    node->get_parameter_or("grasp_max_effort", grasp_max_effort, 28.0);
-    node->get_parameter_or("grasp_step", grasp_step, 0.05);
-    node->get_parameter_or("grasp_pause_ms", grasp_pause_ms, 80);
-    node->get_parameter_or("grasp_settle_ms", grasp_settle_ms, 350);
-    node->get_parameter_or("grasp_contact_timeout_ms", grasp_contact_timeout_ms, 1000);
+    node->get_parameter_or("grasp_close_position", grasp_close_position, 0.62);
+    node->get_parameter_or("grasp_max_effort", grasp_max_effort, 32.0);
+    node->get_parameter_or("grasp_step", grasp_step, 0.04);
+    node->get_parameter_or("grasp_pause_ms", grasp_pause_ms, 120);
+    node->get_parameter_or("grasp_settle_ms", grasp_settle_ms, 700);
+    node->get_parameter_or("grasp_contact_timeout_ms", grasp_contact_timeout_ms, 1500);
     if (grasp_step <= 0.0) {
-        RCLCPP_WARN(logger, "grasp_step must be positive; using 0.05");
-        grasp_step = 0.05;
+        RCLCPP_WARN(logger, "grasp_step must be positive; using 0.04");
+        grasp_step = 0.04;
     }
     if (grasp_tcp_z_offset < -0.02) {
         RCLCPP_WARN(logger, "grasp_tcp_z_offset too low; clamping to -0.02");
@@ -421,12 +432,12 @@ int main(int argc, char* argv[]) {
         place_tcp_z_offset = 0.02;
     }
     if (grasp_pause_ms < 0) {
-        RCLCPP_WARN(logger, "grasp_pause_ms must be non-negative; using 80");
-        grasp_pause_ms = 80;
+        RCLCPP_WARN(logger, "grasp_pause_ms must be non-negative; using 120");
+        grasp_pause_ms = 120;
     }
     if (grasp_settle_ms < 0) {
-        RCLCPP_WARN(logger, "grasp_settle_ms must be non-negative; using 350");
-        grasp_settle_ms = 350;
+        RCLCPP_WARN(logger, "grasp_settle_ms must be non-negative; using 700");
+        grasp_settle_ms = 700;
     }
     if (grasp_contact_timeout_ms < 500) {
         RCLCPP_WARN(logger, "grasp_contact_timeout_ms too low; using 500");

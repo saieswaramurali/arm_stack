@@ -46,6 +46,8 @@ source install/setup.bash
 
 ## Normal Robot Flow
 
+Use this when you only need the robot, MoveIt, controllers, and RViz.
+
 ```bash
 ros2 launch arm_bringup bringup.launch.py
 ```
@@ -62,10 +64,13 @@ ros2 run arm_manipulation goto_pose         # plan+execute to a Cartesian pose
 ros2 run arm_manipulation scene_demo        # collision object + attach/detach demo
 ```
 
-## Pick/Place Flow
+## Static Pick/Place Flow
+
+Use this for the known single blue box at the fixed pose used by
+`pick_place_static`.
 
 ```bash
-ros2 launch arm_bringup pick_and_place_bringup.launch.py
+ros2 launch arm_bringup pick_and_place_bringup.launch.py spawn_randomly:=false
 ```
 
 Loads the Ignition table world, raises the UR5e on the platform, and uses the
@@ -76,6 +81,74 @@ pick/place initial joint pose.
 ```bash
 ros2 run arm_manipulation pick_place_static
 ros2 run arm_manipulation pick_place_static --ros-args -p grasp_tcp_z_offset:=-0.01 -p grasp_close_position:=0.61 -p grasp_max_effort:=30.0
+```
+
+Useful static parameters:
+
+```bash
+ros2 run arm_manipulation pick_place_static --ros-args \
+  -p box_x:=0.0 -p box_y:=0.75 -p box_z:=0.33 \
+  -p place_x:=0.25 -p place_y:=0.75 -p place_z:=0.33 \
+  -p grasp_close_position:=0.62 -p grasp_max_effort:=32.0
+```
+
+## Dynamic Pick/Place Pipeline
+
+Use this for random colored boxes, wrist-camera perception, and later dynamic
+grasping. By default this launch deletes the fixed `pick_box`, spawns three
+random colored boxes near the static-box area, and adds the drop bin.
+
+Terminal 1:
+
+```bash
+ros2 launch arm_bringup pick_and_place_bringup.launch.py
+```
+
+Useful launch parameters:
+
+```bash
+ros2 launch arm_bringup pick_and_place_bringup.launch.py spawn_randomly:=true random_box_count:=3
+ros2 launch arm_bringup pick_and_place_bringup.launch.py enable_camera:=true
+```
+
+Terminal 2, move the wrist camera to the detect pose over the box area:
+
+```bash
+ros2 run arm_manipulation pick_place_dynamic
+```
+
+Useful detect-pose parameters:
+
+```bash
+ros2 run arm_manipulation pick_place_dynamic --ros-args \
+  -p detect_x:=0.0 -p detect_y:=0.75 -p detect_camera_z:=0.65
+```
+
+Terminal 3, run perception:
+
+```bash
+ros2 launch arm_perception perception.launch.py
+```
+
+Debug the detector:
+
+```bash
+ros2 launch arm_perception perception.launch.py show_debug_window:=true
+ros2 topic hz /detected_objects
+ros2 topic echo /detected_objects --once
+```
+
+In RViz, add an `Image` display for:
+
+```text
+/object_detector/debug_image
+```
+
+Random scene utility:
+
+```bash
+ros2 run arm_bringup spawn_objects.py --reset
+ros2 run arm_bringup spawn_objects.py --reset --count 5
 ```
 
 Gripper actions:

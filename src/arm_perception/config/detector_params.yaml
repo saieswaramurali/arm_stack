@@ -1,0 +1,41 @@
+object_detector:
+  ros__parameters:
+    use_sim_time: true
+    image_topic: /wrist_camera/image
+    depth_topic: /wrist_camera/depth_image
+    camera_info_topic: /wrist_camera/camera_info
+    detected_objects_topic: /detected_objects
+    debug_image_topic: /object_detector/debug_image
+    detect_service: /detect_objects
+    target_frame: world
+    tcp_frame: tcp
+    camera_frame: wrist_camera_optical_frame
+    use_image_header_frame: false
+    horizontal_fov: 1.21
+    publish_rate: 5.0
+    max_detection_age: 0.75
+    min_contour_area: 300.0
+    min_top_face_area: 120.0
+    top_depth_percentile: 0.20
+    top_depth_tolerance: 0.015
+    box_height: 0.06
+    print_predictions: true
+    publish_debug_image: true
+    show_debug_window: false
+    debug_window_name: object_detector
+    log_static_pick_box: true
+    static_pick_box:
+      x: 0.0
+      y: 0.75
+      z: 0.33
+      yaw: 0.0
+    colors:
+      red:
+        hsv_low: [0, 80, 40]
+        hsv_high: [12, 255, 255]
+      green:
+        hsv_low: [35, 60, 35]
+        hsv_high: [90, 255, 255]
+      blue:
+        hsv_low: [95, 60, 35]
+        hsv_high: [130, 255, 255]
