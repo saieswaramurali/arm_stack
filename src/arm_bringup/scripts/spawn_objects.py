@@ -14,7 +14,18 @@ TABLE_SIZE_X = 0.80
 TABLE_SIZE_Y = 0.80
 STATIC_BOX_X = 0.0
 STATIC_BOX_Y = 0.75
-SPAWN_RADIUS = 0.20
+SPAWN_RADIUS = 0.10
+# Spots calibrated to the wrist camera at the scan pose measured via tf2_echo:
+# camera at world (-0.162, 0.808, 0.668) looking straight down, table top 0.36
+# -> visible x[-0.32, 0.00], y[0.59, 1.02]; spots keep margins for box size,
+# jitter, and arm reach. Recalibrate if the scan pose changes.
+CAMERA_SPOTS = [
+    (-0.10, 0.69),
+    (-0.21, 0.71),
+    (-0.10, 0.82),
+    (-0.22, 0.84),
+]
+SPOT_JITTER = 0.02
 BOX_SIZE_X = 0.04
 BOX_SIZE_Y = 0.04
 BOX_SIZE_Z = 0.06
@@ -206,6 +217,20 @@ def random_table_poses(count):
     x_max = TABLE_X + TABLE_SIZE_X / 2.0 - POSE_MARGIN
     y_min = TABLE_Y - TABLE_SIZE_Y / 2.0 + POSE_MARGIN
     y_max = TABLE_Y + TABLE_SIZE_Y / 2.0 - POSE_MARGIN
+
+    if count <= len(CAMERA_SPOTS):
+        # Pick random distinct camera-visible spots, jitter within the view
+        spots = random.sample(CAMERA_SPOTS, count)
+        poses = []
+        for spot_x, spot_y in spots:
+            x = spot_x + random.uniform(-SPOT_JITTER, SPOT_JITTER)
+            y = spot_y + random.uniform(-SPOT_JITTER, SPOT_JITTER)
+            x = min(max(x, x_min), x_max)
+            y = min(max(y, y_min), y_max)
+            poses.append((x, y, random.uniform(-math.pi, math.pi)))
+        return poses
+
+    # More boxes than known-good spots: fall back to rejection sampling
     poses = []
     for _ in range(count):
         for _ in range(200):
@@ -240,7 +265,7 @@ def value_at(values, index, default):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--world", default="table_pick_ign")
-    parser.add_argument("--count", type=int, default=3)
+    parser.add_argument("--count", type=int, default=2, choices=range(1, 5))
     parser.add_argument("--reset", action="store_true")
     parser.add_argument("--x", help="Fixed box x, or comma-separated x values")
     parser.add_argument("--y", help="Fixed box y, or comma-separated y values")

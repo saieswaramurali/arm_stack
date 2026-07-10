@@ -253,6 +253,17 @@ std::map<std::string, double> ready_joints() {
     };
 }
 
+std::map<std::string, double> bin_carry_joints() {
+    return {
+        {"shoulder_pan_joint", -0.75},
+        {"shoulder_lift_joint", -1.20},
+        {"elbow_joint", 1.35},
+        {"wrist_1_joint", -1.72},
+        {"wrist_2_joint", -1.57},
+        {"wrist_3_joint", 0.0},
+    };
+}
+
 std::vector<std::string> gripper_touch_links() {
     return {
         "robotiq_85_left_finger_link",
@@ -583,14 +594,13 @@ int main(int argc, char* argv[]) {
             break;
         }
 
-        auto pre_place = make_pose(
-            place_x, place_y, place_z + approach_clearance,
-            1.0, 0.0, 0.0, 0.0);
-        if (!goto_pose(move_group, logger, "transport_to_bin", pre_place)) {
+        if (!goto_joints(move_group, logger, "transport_to_bin", bin_carry_joints())) {
             break;
         }
 
-        auto place_pose = pre_place;
+        auto place_pose = move_group.getCurrentPose(kEndEffectorLink).pose;
+        place_pose.position.x = place_x;
+        place_pose.position.y = place_y;
         place_pose.position.z = place_z + place_tcp_z_offset;
         if (!cartesian_to_pose(move_group, logger, "descend_to_bin", place_pose)) {
             break;

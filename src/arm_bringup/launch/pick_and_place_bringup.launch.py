@@ -25,7 +25,7 @@ def generate_launch_description():
         DeclareLaunchArgument("robot_base_z", default_value="0.30"),
         DeclareLaunchArgument("enable_camera", default_value="true"),
         DeclareLaunchArgument("spawn_randomly", default_value="true"),
-        DeclareLaunchArgument("random_box_count", default_value="3"),
+        DeclareLaunchArgument("random_box_count", default_value="2"),
         DeclareLaunchArgument("random_spawn_world", default_value="table_pick_ign"),
         DeclareLaunchArgument(
             "world",
